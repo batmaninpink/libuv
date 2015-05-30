@@ -111,6 +111,10 @@ void uv_close(uv_handle_t* handle, uv_close_cb close_cb) {
     uv__tcp_close((uv_tcp_t*)handle);
     break;
 
+  case UV_DEVICE:
+    uv__device_close((uv_device_t*)handle);
+    break;
+
   case UV_UDP:
     uv__udp_close((uv_udp_t*)handle);
     break;
@@ -240,6 +244,7 @@ static void uv__finish_close(uv_handle_t* handle) {
     case UV_NAMED_PIPE:
     case UV_TCP:
     case UV_TTY:
+    case UV_DEVICE:
       uv__stream_destroy((uv_stream_t*)handle);
       break;
 
@@ -690,6 +695,7 @@ int uv_fileno(const uv_handle_t* handle, uv_os_fd_t* fd) {
   case UV_TCP:
   case UV_NAMED_PIPE:
   case UV_TTY:
+  case UV_DEVICE:
     fd_out = uv__stream_fd((uv_stream_t*) handle);
     break;
 
