@@ -260,8 +260,6 @@ static void uv_tty_capture_initial_style(CONSOLE_SCREEN_BUFFER_INFO* info) {
 int uv_tty_set_mode(uv_tty_t* tty, uv_tty_mode_t mode) {
   DWORD flags;
   unsigned char was_reading;
-  uv_alloc_cb alloc_cb;
-  uv_read_cb read_cb;
   int err;
 
   if (!(tty->flags & UV_HANDLE_TTY_READABLE)) {
@@ -290,8 +288,6 @@ int uv_tty_set_mode(uv_tty_t* tty, uv_tty_mode_t mode) {
   /* If currently reading, stop, and restart reading. */
   if (tty->flags & UV_HANDLE_READING) {
     was_reading = 1;
-    alloc_cb = tty->alloc_cb;
-    read_cb = tty->read_cb;
 
     if (was_reading) {
       err = uv_tty_read_stop(tty);
@@ -309,7 +305,7 @@ int uv_tty_set_mode(uv_tty_t* tty, uv_tty_mode_t mode) {
 
   /* If we just stopped reading, restart. */
   if (was_reading) {
-    err = uv_tty_read_start(tty, alloc_cb, read_cb);
+    err = uv_tty_read_start(tty, tty->alloc_cb, tty->read_cb);
     if (err) {
       return uv_translate_sys_error(err);
     }

@@ -650,8 +650,12 @@ UV_EXTERN int uv_device_init(uv_loop_t* loop,
                              uv_device_t* device,
                              const char* path,
                              int flags);
+UV_EXTERN int uv_device_open(uv_loop_t* loop,
+                             uv_device_t* device,
+                             uv_os_sock_t fd,
+                             int flags);
 UV_EXTERN int uv_device_ioctl(uv_device_t* device,
-                              unsigned long cmd,
+                              int cmd,
                               uv_ioargs_t* args);
 
 /*

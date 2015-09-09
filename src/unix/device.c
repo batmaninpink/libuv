@@ -26,11 +26,12 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 
-int uv_device_init(uv_loop_t* loop,
-                   uv_device_t* device,
-                   const char* path,
-                   int flags) {
-  int fd, err;
+static int uv_device__init(uv_loop_t* loop,
+                           uv_device_t* device,
+                           const char* path,
+                           uv_os_sock_t fd,
+                           int flags) {
+  int err;
   int stream_flags;
 
   if (flags != O_RDONLY && flags != O_WRONLY && flags != O_RDWR)
@@ -38,12 +39,14 @@ int uv_device_init(uv_loop_t* loop,
 
   uv__stream_init(loop, (uv_stream_t*) device, UV_DEVICE);
 
-  fd = open(path, flags); 
+  if (path)
+    fd = open(path, flags);
+
   if (fd < 0)
     return -errno;
 
   stream_flags = 0;
-  if (flags & O_RDONLY) 
+  if (flags & O_RDONLY)
     stream_flags |= UV_STREAM_READABLE;
   else if (flags & O_WRONLY)
     stream_flags |= UV_STREAM_WRITABLE;
@@ -64,15 +67,27 @@ int uv_device_init(uv_loop_t* loop,
   return 0;
 }
 
-int uv_device_ioctl(uv_device_t* device,
-                    unsigned long cmd,
-                    uv_ioargs_t* args) {
+int uv_device_init(uv_loop_t* loop,
+                   uv_device_t* device,
+                   const char* path,
+                   int flags) {
+  return uv_device__init(loop, device, path, -1, flags);
+}
+
+int uv_device_open(uv_loop_t* loop,
+                   uv_device_t* device,
+                   uv_os_sock_t fd,
+                   int flags) {
+  return uv_device__init(loop, device, NULL, fd, flags);
+}
+
+int uv_device_ioctl(uv_device_t* device, int cmd, uv_ioargs_t* args) {
   int err;
 
   err = ioctl(uv__stream_fd((uv_stream_t*) device), cmd, args->arg);
   if (err < 0)
     return -errno;
-  
+
   return err;
 }
 

@@ -44,7 +44,7 @@ int uv_device_init(uv_loop_t* loop,
     return -EINVAL;
 
   dwCreationDisposition = 0;
-  uvflags = 0; 
+  uvflags = 0;
 
   uv_stream_init(loop, (uv_stream_t*) handle, UV_DEVICE);
   handle->handle = INVALID_HANDLE_VALUE;
@@ -88,16 +88,14 @@ int uv_device_init(uv_loop_t* loop,
   return 0;
 }
 
-int uv_device_ioctl(uv_device_t* device,
-                    unsigned long cmd,
-                    uv_ioargs_t* args) {
+int uv_device_ioctl(uv_device_t* device, int cmd, uv_ioargs_t* args) {
   BOOL r;
   DWORD size = 0;
   assert(device && device->handle != INVALID_HANDLE_VALUE);
   assert(args && args->input && args->input_len && args->output_len);
 
-  r = DeviceIoControl(device->handle, 
-                      cmd,
+  r = DeviceIoControl(device->handle,
+                      (DWORD) cmd,
                       args->input,
                       args->input_len,
                       args->output,
@@ -105,10 +103,8 @@ int uv_device_ioctl(uv_device_t* device,
                       &size,
                       NULL);
 
-  if (r) {
-    args->output_len = size;
+  if (r)
     return size;
-  }
 
   return uv_translate_sys_error(GetLastError());
 }
@@ -181,6 +177,7 @@ int uv_device_read_start(uv_device_t* handle,
   return 0; 
 }
 
+
 int uv_device_write(uv_loop_t* loop,
                     uv_write_t* req,
                     uv_device_t* handle,
@@ -191,6 +188,10 @@ int uv_device_write(uv_loop_t* loop,
   DWORD err = 0;
   
   if (nbufs != 1 && (nbufs != 0 || !handle)) {
+    return ERROR_NOT_SUPPORTED;
+  }
+  /* Only TCP handles are supported for sharing. */
+  if (handle && (!(handle->flags & UV_HANDLE_CONNECTION))) {
     return ERROR_NOT_SUPPORTED;
   }
 
@@ -235,46 +236,37 @@ void uv_process_device_read_req(uv_loop_t* loop,
   DWORD err;
 
   assert(handle->type == UV_DEVICE);
-  assert(handle->flags & UV_HANDLE_READING);
 
   handle->flags &= ~UV_HANDLE_READ_PENDING;
 
+  if (!(handle->flags & UV_HANDLE_READING)) {
+    DECREASE_PENDING_REQ_COUNT(handle);
+    return;
+  }
+
   if (!REQ_SUCCESS(req)) {
     /* An error occurred doing the read. */
-    if (handle->flags & UV_HANDLE_READING)  {
-      handle->flags &= ~UV_HANDLE_READING;
-      DECREASE_ACTIVE_COUNT(loop, handle);
-
-      err = GET_REQ_SOCK_ERROR(req);
-      handle->read_cb((uv_stream_t*) handle,
-                      uv_translate_sys_error(err),
-                      &handle->read_buffer);
-    }
+    handle->flags &= ~UV_HANDLE_READING;
+    DECREASE_ACTIVE_COUNT(loop, handle);
+    err = GET_REQ_SOCK_ERROR(req);
+    handle->read_cb((uv_stream_t*) handle,
+		    uv_translate_sys_error(err),
+		    &handle->read_buffer);
   } else {
     if (req->u.io.overlapped.InternalHigh > 0) {
       /* Successful read */
       handle->read_cb((uv_stream_t*) handle,
                       req->u.io.overlapped.InternalHigh,
                       &handle->read_buffer);
-      /* Read again only if bytes == buf.len */
-      if (req->u.io.overlapped.InternalHigh < sizeof(handle->read_buffer.len))
-        goto done;
     } else {
       /* Connection closed */
-      if (handle->flags & UV_HANDLE_READING) {
-        handle->flags &= ~UV_HANDLE_READING;
-        DECREASE_ACTIVE_COUNT(loop, handle);
-      }
+      handle->flags &= ~UV_HANDLE_READING;
+      DECREASE_ACTIVE_COUNT(loop, handle);
       handle->flags &= ~UV_HANDLE_READABLE;
-
       handle->read_cb((uv_stream_t*) handle, UV_EOF, &handle->read_buffer);
-      goto done;
     }
   }
-  /* 
-    may be we need more do read operation 
-  */
-done:
+
   /* Post another read if still reading and not closing. */
   if ((handle->flags & UV_HANDLE_READING) &&
       !(handle->flags & UV_HANDLE_READ_PENDING)) {
